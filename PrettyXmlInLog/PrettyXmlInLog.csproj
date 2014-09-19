@@ -102,7 +102,12 @@
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Import Project="$(MSBuildProjectDirectory)\DllExport\NppPlugin.DllExport.targets" />
   <PropertyGroup>
-    <PreBuildEvent>echo f | xcopy "d:\dev\PrettyXmlInLog\PrettyXmlInLog\bin\Debug\PrettyXmlInLog.dll" "C:\Program Files (x86)\Notepad++\plugins\PrettyXmlInLog.dll" /Y</PreBuildEvent>
+    <PreBuildEvent>
+    </PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
