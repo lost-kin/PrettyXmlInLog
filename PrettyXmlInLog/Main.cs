@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using System.Xml;
 using NppPluginNET;
 
 namespace PrettyXmlInLog
@@ -21,8 +22,8 @@ namespace PrettyXmlInLog
 
 		internal static void CommandMenuInit()
 		{
-			PluginBase.SetCommand(0, "Format Line", FormatLine, new ShortcutKey(true, true, true, Keys.L));
-			PluginBase.SetCommand(1, "Format Selection", FormatSelection, new ShortcutKey(true, true, true, Keys.S));
+			PluginBase.SetCommand(0, "Format Selection", FormatSelection, new ShortcutKey(true, true, true, Keys.S));
+			//PluginBase.SetCommand(1, "Format Line", FormatLine, new ShortcutKey(true, true, true, Keys.L));
 		}
 
 		internal static void SetToolBarIcon()
@@ -53,10 +54,29 @@ namespace PrettyXmlInLog
 			try
 			{
 				var selection = GetSelection();
-				MessageBox.Show(selection);
+
+				selection = FormatAsXml(selection);
+
+				ReplaceSelection(selection);
 			}
 			catch (Exception ignore)
 			{ }
+		}
+
+		private static string FormatAsXml(string text)
+		{
+			var ms = new MemoryStream();
+			var xtw = new XmlTextWriter(ms, Encoding.Unicode);
+			var doc = new XmlDocument();
+
+			doc.LoadXml(text);
+			xtw.Formatting = Formatting.Indented;
+			doc.WriteContentTo(xtw);
+			xtw.Flush();
+			ms.Seek(0, SeekOrigin.Begin);
+			var sr = new StreamReader(ms);
+
+			return sr.ReadToEnd();
 		}
 
 		private static String GetCurrentLine()
@@ -85,6 +105,12 @@ namespace PrettyXmlInLog
 			{
 				return String.Empty;
 			}
+		}
+
+		private static void ReplaceSelection(string newText)
+		{
+			var hCurrentEditView = PluginBase.GetCurrentScintilla();
+			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_REPLACESEL, 0, newText);
 		}
 
 		#endregion
