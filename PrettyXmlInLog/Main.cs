@@ -50,16 +50,7 @@ namespace PrettyXmlInLog
 				var startPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_POSITIONFROMLINE, lineNum, 0);
 				var endPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETLINEENDPOSITION, lineNum, 0);
 
-				var length = endPos - startPos;
-
-				string lineText = GetTextRange(startPos, endPos);
-
-				Win32.SendMessage(hCurrentEditView, SciMsg.SCI_SETCURRENTPOS, startPos, 0);
-				Win32.SendMessage(hCurrentEditView, SciMsg.SCI_DELETERANGE, startPos, length);
-
-				lineText = FormatAsXml(lineText);
-
-				Win32.SendMessage(hCurrentEditView, SciMsg.SCI_INSERTTEXT, startPos, lineText);
+				FormatAsXmlTextBetween(startPos, endPos);
 			}
 			catch (Exception ignore)
 			{ }
@@ -69,14 +60,28 @@ namespace PrettyXmlInLog
 		{
 			try
 			{
-				var selection = GetSelection();
+				var hCurrentEditView = PluginBase.GetCurrentScintilla();
 
-				selection = FormatAsXml(selection);
+				var startPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETSELECTIONNSTART, 0, 0);
+				var endPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETSELECTIONNEND, 0, 0);
 
-				ReplaceSelection(selection);
+				FormatAsXmlTextBetween(startPos, endPos);
 			}
 			catch (Exception ignore)
 			{ }
+		}
+
+		private static void FormatAsXmlTextBetween(int startPos, int endPos)
+		{
+			if (startPos >= endPos) { return; }
+
+			var lineText = GetTextRange(startPos, endPos);
+			lineText = FormatAsXml(lineText);
+
+			var hCurrentEditView = PluginBase.GetCurrentScintilla();
+			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_SETCURRENTPOS, startPos, 0);
+			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_DELETERANGE, startPos, endPos - startPos);
+			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_INSERTTEXT, startPos, lineText);
 		}
 
 		private static string FormatAsXml(string text)
