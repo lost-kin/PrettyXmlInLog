@@ -23,7 +23,7 @@ namespace PrettyXmlInLog
 		internal static void CommandMenuInit()
 		{
 			PluginBase.SetCommand(0, "Format Selection", FormatSelection, new ShortcutKey(true, true, true, Keys.S));
-			//PluginBase.SetCommand(1, "Format Line", FormatLine, new ShortcutKey(true, true, true, Keys.L));
+			PluginBase.SetCommand(1, "Format Line", FormatLine, new ShortcutKey(true, true, true, Keys.L));
 		}
 
 		internal static void SetToolBarIcon()
@@ -42,8 +42,24 @@ namespace PrettyXmlInLog
 		{
 			try
 			{
-				var line = GetCurrentLine();
-				MessageBox.Show(line);
+				var hCurrentEditView = PluginBase.GetCurrentScintilla();
+
+				var currentPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETCURRENTPOS, 0, 0);
+				var lineNum = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_LINEFROMPOSITION, currentPos, 0);
+
+				var startPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_POSITIONFROMLINE, lineNum, 0);
+				var endPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETLINEENDPOSITION, lineNum, 0);
+
+				var length = endPos - startPos;
+
+				string lineText = GetTextRange(startPos, endPos);
+
+				Win32.SendMessage(hCurrentEditView, SciMsg.SCI_SETCURRENTPOS, startPos, 0);
+				Win32.SendMessage(hCurrentEditView, SciMsg.SCI_DELETERANGE, startPos, length);
+
+				lineText = FormatAsXml(lineText);
+
+				Win32.SendMessage(hCurrentEditView, SciMsg.SCI_INSERTTEXT, startPos, lineText);
 			}
 			catch (Exception ignore)
 			{ }
@@ -79,6 +95,16 @@ namespace PrettyXmlInLog
 			return sr.ReadToEnd();
 		}
 
+		private static string GetTextRange(int startPos, int endPos)
+		{
+			using (var sciTextRange = new Sci_TextRange(startPos, endPos, endPos - startPos + 1))
+			{
+				var hCurrentEditView = PluginBase.GetCurrentScintilla();
+				Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETTEXTRANGE, 0, sciTextRange.NativePointer);
+				return sciTextRange.lpstrText;
+			}
+		}
+
 		private static String GetCurrentLine()
 		{
 			return GetText(SciMsg.SCI_GETCURLINE);
@@ -96,7 +122,7 @@ namespace PrettyXmlInLog
 
 			if (length > 0)
 			{
-				var lineStringBuilder = new StringBuilder(length);
+				var lineStringBuilder = new StringBuilder(length + 1);
 				Win32.SendMessage(hCurrentEditView, sciMsg, length, lineStringBuilder);
 
 				return lineStringBuilder.ToString();
