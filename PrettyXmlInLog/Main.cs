@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Xml;
 using NppPluginNET;
@@ -15,6 +13,7 @@ namespace PrettyXmlInLog
 		#region Fields
 
 		internal const string PluginName = "Pretty Xml In Log";
+		private static readonly Regex XmlRegex = new Regex(@"(?:<\?xml.*\?>)?\s*<(?<tag>[\w:]+)[^<]*>.*</\k<tag>>");
 
 		#endregion
 
@@ -22,8 +21,9 @@ namespace PrettyXmlInLog
 
 		internal static void CommandMenuInit()
 		{
-			PluginBase.SetCommand(0, "Format Selection", FormatSelection, new ShortcutKey(true, true, true, Keys.S));
-			PluginBase.SetCommand(1, "Format Line", FormatLine, new ShortcutKey(true, true, true, Keys.L));
+			PluginBase.SetCommand(0, "Format Selection as XML", FormatSelection, new ShortcutKey(true, true, true, Keys.S));
+			PluginBase.SetCommand(1, "Format XML in Line", FormatLine, new ShortcutKey(true, true, true, Keys.L));
+			//PluginBase.SetCommand(2, "Format XML in All Lines", FormatAllLine, new ShortcutKey(true, true, true, Keys.A));
 		}
 
 		internal static void SetToolBarIcon()
@@ -50,7 +50,30 @@ namespace PrettyXmlInLog
 				var startPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_POSITIONFROMLINE, lineNum, 0);
 				var endPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETLINEENDPOSITION, lineNum, 0);
 
-				FormatAsXmlTextBetween(startPos, endPos);
+				if (startPos >= endPos) { return; }
+
+				var lineText = GetTextRange(startPos, endPos);
+
+				var match = XmlRegex.Match(lineText);
+
+				if (!match.Success) { return; }
+
+				var formattedXml = FormatAsXml(match.Value);
+
+				if (match.Index != 0)
+				{
+					formattedXml = Environment.NewLine + formattedXml;
+				}
+
+				if ((endPos - startPos) != match.Length)
+				{
+					formattedXml = formattedXml + Environment.NewLine;
+				}
+
+				var xmlStartPos = startPos + match.Index;
+				var xmlEndPos = xmlStartPos + match.Length;
+
+				ReplaceTextBetween(xmlStartPos, xmlEndPos, formattedXml);
 			}
 			catch (Exception ignore)
 			{ }
@@ -65,39 +88,43 @@ namespace PrettyXmlInLog
 				var startPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETSELECTIONNSTART, 0, 0);
 				var endPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETSELECTIONNEND, 0, 0);
 
-				FormatAsXmlTextBetween(startPos, endPos);
+				if (startPos >= endPos) { return; }
+
+				var selectionText = GetTextRange(startPos, endPos);
+				selectionText = FormatAsXml(selectionText);
+
+				ReplaceTextBetween(startPos, endPos, selectionText);
 			}
 			catch (Exception ignore)
 			{ }
 		}
 
-		private static void FormatAsXmlTextBetween(int startPos, int endPos)
+		private static void ReplaceTextBetween(int startPos, int endPos, string newText)
 		{
-			if (startPos >= endPos) { return; }
-
-			var lineText = GetTextRange(startPos, endPos);
-			lineText = FormatAsXml(lineText);
-
 			var hCurrentEditView = PluginBase.GetCurrentScintilla();
 			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_SETCURRENTPOS, startPos, 0);
 			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_DELETERANGE, startPos, endPos - startPos);
-			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_INSERTTEXT, startPos, lineText);
+			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_INSERTTEXT, startPos, newText);
 		}
 
 		private static string FormatAsXml(string text)
 		{
-			var ms = new MemoryStream();
-			var xtw = new XmlTextWriter(ms, Encoding.Unicode);
-			var doc = new XmlDocument();
+			using (var ms = new MemoryStream())
+			using (var xtw = new XmlTextWriter(ms, Encoding.Unicode))
+			{
+				var doc = new XmlDocument();
+				doc.LoadXml(text);
+				xtw.Formatting = Formatting.Indented;
 
-			doc.LoadXml(text);
-			xtw.Formatting = Formatting.Indented;
-			doc.WriteContentTo(xtw);
-			xtw.Flush();
-			ms.Seek(0, SeekOrigin.Begin);
-			var sr = new StreamReader(ms);
+				doc.WriteContentTo(xtw);
 
-			return sr.ReadToEnd();
+				xtw.Flush();
+				ms.Seek(0, SeekOrigin.Begin);
+				using (var sr = new StreamReader(ms))
+				{
+					return sr.ReadToEnd();
+				}
+			}
 		}
 
 		private static string GetTextRange(int startPos, int endPos)
