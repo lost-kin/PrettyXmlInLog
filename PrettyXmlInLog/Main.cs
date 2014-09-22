@@ -23,7 +23,7 @@ namespace PrettyXmlInLog
 		{
 			PluginBase.SetCommand(0, "Format Selection as XML", FormatSelection, new ShortcutKey(true, true, true, Keys.S));
 			PluginBase.SetCommand(1, "Format XML in Line", FormatLine, new ShortcutKey(true, true, true, Keys.L));
-			//PluginBase.SetCommand(2, "Format XML in All Lines", FormatAllLine, new ShortcutKey(true, true, true, Keys.A));
+			PluginBase.SetCommand(2, "Format XML in All Lines", FormatAllLines, new ShortcutKey(true, true, true, Keys.A));
 		}
 
 		internal static void SetToolBarIcon()
@@ -42,47 +42,29 @@ namespace PrettyXmlInLog
 		{
 			try
 			{
+				Cursor.Current = Cursors.WaitCursor;
+
 				var hCurrentEditView = PluginBase.GetCurrentScintilla();
 
 				var currentPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETCURRENTPOS, 0, 0);
 				var lineNum = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_LINEFROMPOSITION, currentPos, 0);
 
-				var startPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_POSITIONFROMLINE, lineNum, 0);
-				var endPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETLINEENDPOSITION, lineNum, 0);
-
-				if (startPos >= endPos) { return; }
-
-				var lineText = GetTextRange(startPos, endPos);
-
-				var match = XmlRegex.Match(lineText);
-
-				if (!match.Success) { return; }
-
-				var formattedXml = FormatAsXml(match.Value);
-
-				if (match.Index != 0)
-				{
-					formattedXml = Environment.NewLine + formattedXml;
-				}
-
-				if ((endPos - startPos) != match.Length)
-				{
-					formattedXml = formattedXml + Environment.NewLine;
-				}
-
-				var xmlStartPos = startPos + match.Index;
-				var xmlEndPos = xmlStartPos + match.Length;
-
-				ReplaceTextBetween(xmlStartPos, xmlEndPos, formattedXml);
+				FormatXmlInLine(lineNum);
 			}
 			catch (Exception ignore)
 			{ }
+			finally
+			{
+				Cursor.Current = Cursors.Default;
+			}
 		}
 
 		internal static void FormatSelection()
 		{
 			try
 			{
+				Cursor.Current = Cursors.WaitCursor;
+
 				var hCurrentEditView = PluginBase.GetCurrentScintilla();
 
 				var startPos = (int)Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETSELECTIONNSTART, 0, 0);
@@ -97,6 +79,72 @@ namespace PrettyXmlInLog
 			}
 			catch (Exception ignore)
 			{ }
+			finally
+			{
+				Cursor.Current = Cursors.Default;
+			}
+		}
+
+		internal static void FormatAllLines()
+		{
+			try
+			{
+				Cursor.Current = Cursors.WaitCursor;
+
+				int currentLine = 0;
+
+				var lineCount = GetLineCount();
+
+				while (currentLine < lineCount)
+				{
+					FormatXmlInLine(currentLine);
+					currentLine++;
+
+					var newLineCount = GetLineCount();
+					var numLinesAdded = newLineCount - lineCount;
+					currentLine += numLinesAdded;
+					lineCount = newLineCount;
+				}
+			}
+			catch (Exception ignore)
+			{
+			}
+			finally
+			{
+				Cursor.Current = Cursors.Default;
+			}
+		}
+
+		private static void FormatXmlInLine(int lineNum)
+		{
+			var hCurrentEditView = PluginBase.GetCurrentScintilla();
+			var startPos = (int) Win32.SendMessage(hCurrentEditView, SciMsg.SCI_POSITIONFROMLINE, lineNum, 0);
+			var endPos = (int) Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETLINEENDPOSITION, lineNum, 0);
+
+			if (startPos >= endPos) { return; }
+
+			var lineText = GetTextRange(startPos, endPos);
+
+			var match = XmlRegex.Match(lineText);
+
+			if (!match.Success) { return; }
+
+			var formattedXml = FormatAsXml(match.Value);
+
+			if (match.Index != 0)
+			{
+				formattedXml = Environment.NewLine + formattedXml;
+			}
+
+			if ((endPos - startPos) != match.Length)
+			{
+				formattedXml = formattedXml + Environment.NewLine;
+			}
+
+			var xmlStartPos = startPos + match.Index;
+			var xmlEndPos = xmlStartPos + match.Length;
+
+			ReplaceTextBetween(xmlStartPos, xmlEndPos, formattedXml);
 		}
 
 		private static void ReplaceTextBetween(int startPos, int endPos, string newText)
@@ -169,6 +217,12 @@ namespace PrettyXmlInLog
 		{
 			var hCurrentEditView = PluginBase.GetCurrentScintilla();
 			Win32.SendMessage(hCurrentEditView, SciMsg.SCI_REPLACESEL, 0, newText);
+		}
+
+		private static int GetLineCount()
+		{
+			var hCurrentEditView = PluginBase.GetCurrentScintilla();
+			return (int) Win32.SendMessage(hCurrentEditView, SciMsg.SCI_GETLINECOUNT, 0, 0);
 		}
 
 		#endregion
